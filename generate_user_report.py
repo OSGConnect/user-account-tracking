@@ -20,7 +20,7 @@ DATE_FMT = "%Y-%b-%d %H:%M:%S.%f %Z"
 
 log = logging.getLogger("reporter")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 class GroupMemberState(Enum):
     """Possible group membership states"""
@@ -139,6 +139,7 @@ def get_latest_snapshot_on_disk() -> Union[Path, None]:
 
 def send_report(recipients: List[str], msg_content: str) -> None:
 
+    # TODO: parametrize email recipients.. (or load from file to keep from versioning)
     # TODO: needs exception/error handling
 
     # get email credentials
@@ -150,7 +151,7 @@ def send_report(recipients: List[str], msg_content: str) -> None:
     message = MIMEText(msg_content, 'html')
 
     message['From'] = 'OSG <osg.user.reporting@gmail.com>'
-    message['To'] = 'Ryan <tanaka@isi.edu>'
+    message['To'] = 'Ryan <serve@server.com>'
     #message['Cc'] = 'someone <server@server.com>'
     message['Subject'] = 'Any subject'
 
@@ -338,6 +339,8 @@ def get_new_accounts_accepted(prev_snapshot: dict, curr_snapshot: dict) -> List[
                 and curr_snapshot["users"][u_name]["groups"]["root.osg"] == GroupMemberState.ACTIVE.value:
 
                 accounts.append(u_name)
+        else:
+            log.warning("user: {u} does not have group root.osg".format(u=u_name))
     
     log.info(
         "found {n} new accounts that have been accepted from {start} to {end}".format(
@@ -443,8 +446,6 @@ if __name__=="__main__":
     # TODO: cleanup smtp code; add error checking; logging
 
     previous_snapshot_file = get_latest_snapshot_on_disk()
-    current_snapshot = get_snapshot(save=True)
-    training_groups = get_training_groups()
 
     if not previous_snapshot_file:
         log.info("No previous snapshot found, exiting")
@@ -453,6 +454,14 @@ if __name__=="__main__":
     with previous_snapshot_file.open("r") as f:
         previous_snapshot = json.load(f)
     
+    current_snapshot = get_snapshot(save=True)
+
+    previous_snapshot_date = datetime.strptime(previous_snapshot["date"], DATE_FMT)
+    current_snapshot_date = datetime.strptime(current_snapshot["date"], DATE_FMT)
+    report_duration_in_days = (current_snapshot_date - previous_snapshot_date).days
+    
+    training_groups = get_training_groups()
+
     # new account requests
     new_account_requests = get_new_account_requests(
             prev_snapshot=previous_snapshot,
@@ -490,7 +499,7 @@ if __name__=="__main__":
     )
 
     report = """
-    <p></p>
+    <p>Account Reporting: {start} to {end} ({dur} days)</p>
     <ul>
         <li>New Accounts Requested: {nar}</li>
             <ul>
@@ -504,6 +513,9 @@ if __name__=="__main__":
             </ul>
     </ul>
     """.format(
+        start=previous_snapshot["date"],
+        end=current_snapshot["date"],
+        dur=report_duration_in_days,
         nar=len(new_account_requests),
         nar_tr=len(new_account_requests_in_training_group),
         nar_ntr=len(new_account_requests_in_non_training_group),
