@@ -219,10 +219,11 @@ def get_new_account_requests(prev_snapshot: dict, curr_snapshot: dict) -> List[s
             if start_date < join_date and join_date <= end_date:
                 accounts.append(u_name)
     
-    log.info("found {n} new account requests from {start} to {end}".format(
+    log.info("found {n} new account requests from {start} to {end}: {acts}".format(
         n=len(accounts),
         start=start_date,
-        end=end_date
+        end=end_date,
+        acts=accounts
     ))
 
     return accounts
@@ -259,8 +260,9 @@ def get_new_account_requests_in_training_group(
                 break
     
     log.info(
-        "found {n} new account requests that have already been added to a training project".format(
-            n=len(accounts)
+            "found {n} new account requests that have already been added to a training project: {acts}".format(
+            n=len(accounts),
+            acts=accounts
         )
     )
 
@@ -304,9 +306,10 @@ def get_new_account_requests_in_non_training_group(
                 break
     
     log.info(
-        "found {n} new account requests that have already been added to a non training project (excluding {excluded})".format(
+            "found {n} new account requests that have already been added to a non training project (excluding {excluded}): {acts}".format(
             n=len(accounts),
-            excluded=exclude
+            excluded=exclude,
+            acts=accounts
         )
     )
 
@@ -339,16 +342,16 @@ def get_new_accounts_accepted(prev_snapshot: dict, curr_snapshot: dict) -> List[
                 and curr_snapshot["users"][u_name]["groups"]["root.osg"] == GroupMemberState.ACTIVE.value:
 
                 accounts.append(u_name)
-        else:
-            log.warning("user: {u} does not have group root.osg".format(u=u_name))
     
     log.info(
-        "found {n} new accounts that have been accepted from {start} to {end}".format(
+            "found {n} new accounts that have been accepted from {start} to {end}: {acts}".format(
             n=len(accounts),
             start=start_date,
-            end=end_date
+            end=end_date,
+            acts=accounts
         )
     )
+
 
     return accounts
 
@@ -385,8 +388,9 @@ def get_new_accounts_accepted_in_training_group(
                 break
 
     log.info(
-        "found {n} accounts that have been accepted and added to a training project".format(
-            n=len(accounts)
+            "found {n} accounts that have been accepted and added to a training project: {acts}".format(
+            n=len(accounts),
+            acts=accounts
         )
     )
 
@@ -429,9 +433,10 @@ def get_new_accounts_accepted_in_non_training_group(
                 break
     
     log.info(
-        "found {n} new accounts accepted that have already been added to a non training project (excluding {excluded})".format(
+            "found {n} new accounts accepted that have already been added to a non training project (excluding {excluded}): {acts}".format(
             n=len(accounts),
-            excluded=exclude
+            excluded=exclude,
+            acts=accounts
         )
     )
 
@@ -499,6 +504,7 @@ if __name__=="__main__":
     )
 
     report = """
+    <p>TEST REPORT</p>
     <p>Account Reporting: {start} to {end} ({dur} days)</p>
     <ul>
         <li>New Accounts Requested: {nar}</li>
