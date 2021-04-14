@@ -151,9 +151,9 @@ def send_report(recipients: List[str], msg_content: str) -> None:
     message = MIMEText(msg_content, 'html')
 
     message['From'] = 'OSG <osg.user.reporting@gmail.com>'
-    message['To'] = 'Ryan <serve@server.com>'
-    #message['Cc'] = 'someone <server@server.com>'
-    message['Subject'] = 'Any subject'
+    message['To'] = 'server <server@server.com>'
+    message['Cc'] = 'server <server@server.com>'
+    message['Subject'] = 'OSG Connect User Account Reporting'
 
     msg_full = message.as_string()
 
@@ -336,12 +336,16 @@ def get_new_accounts_accepted(prev_snapshot: dict, curr_snapshot: dict) -> List[
 
     for u_name, u_info in prev_snapshot["users"].items():
 
+        # TODO: figure out what it means to be in group root.osg
         # not all memebers are part of "root.osg", skip those that are not 
         if "root.osg" in u_info["groups"]:
             if u_info["groups"]["root.osg"] == GroupMemberState.PENDING.value \
+                and "root.osg" in curr_snapshot["users"][u_name]["groups"] \
                 and curr_snapshot["users"][u_name]["groups"]["root.osg"] == GroupMemberState.ACTIVE.value:
 
                 accounts.append(u_name)
+        else:
+            log.warning("user: {u} does not have group root.osg".format(u=u_name))
     
     log.info(
             "found {n} new accounts that have been accepted from {start} to {end}: {acts}".format(
