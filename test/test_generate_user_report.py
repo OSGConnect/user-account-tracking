@@ -1,8 +1,6 @@
 import pytest
 
 from generate_user_report import get_new_account_requests
-from generate_user_report import get_new_account_requests_in_training_group
-from generate_user_report import get_new_account_requests_in_non_training_group
 from generate_user_report import get_new_accounts_accepted
 from generate_user_report import get_new_accounts_accepted_in_training_group
 from generate_user_report import get_new_accounts_accepted_in_non_training_group
@@ -66,22 +64,6 @@ class TestGetNewAccountRequests:
         result = get_new_account_requests(prev_snapshot, curr_snapshot)
         assert result == ["pam_beesly"]
     
-    def test_get_new_account_requests_in_training_group(self, curr_snapshot):
-        result = get_new_account_requests_in_training_group(
-            new_act_reqs=["pam_beesly"],
-            curr_snapshot=curr_snapshot,
-            training_projects={"root.osg.training2021"}
-        )
-
-        assert result == ["pam_beesly"]
-    
-    def test_get_new_account_requests_in_non_training_group(self, curr_snapshot):
-        result = get_new_account_requests_in_non_training_group(
-            new_act_reqs=["pam_beesly"],
-            curr_snapshot=curr_snapshot,
-            training_projects={"root.osg.training2021"},
-        )
-
         assert result == ["pam_beesly"]
     
     def test_get_new_accounts_accepted(self, prev_snapshot, curr_snapshot):
