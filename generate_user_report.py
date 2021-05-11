@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 import smtplib
+import argparse
 
 from collections import defaultdict
 from datetime import datetime
@@ -83,12 +84,14 @@ def get_snapshot(save=True) -> dict:
     # get the membership information from each group (len(groups) number of api requests...)
     groups = client.get_group_list()
     for group_name in tqdm(groups):
-        memberships = client.get_group_members(group_name)
-        for m in memberships:
-            if "groups" not in snapshot[m["user_name"]]:
-                snapshot[m["user_name"]]["groups"] = dict()
+        # only concerned with groups that are part of "root.osg"
+        if "root.osg" in group_name:
+            memberships = client.get_group_members(group_name)
+            for m in memberships:
+                if "groups" not in snapshot[m["user_name"]]:
+                    snapshot[m["user_name"]]["groups"] = dict()
 
-            snapshot[m["user_name"]]["groups"][group_name] = m["state"]
+                snapshot[m["user_name"]]["groups"][group_name] = m["state"]
 
     log.info("collected {num} users in the root.osg group".format(num=len(snapshot)))
 
@@ -151,8 +154,7 @@ def send_report(recipients: List[str], msg_content: str) -> None:
     message = MIMEText(msg_content, 'html')
 
     message['From'] = 'OSG <osg.user.reporting@gmail.com>'
-    message['To'] = 'server <server@server.com>'
-    message['Cc'] = 'server <server@server.com>'
+    message['To'] = ",".join(recipients)
     message['Subject'] = 'OSG Connect User Account Reporting'
 
     msg_full = message.as_string()
@@ -228,94 +230,6 @@ def get_new_account_requests(prev_snapshot: dict, curr_snapshot: dict) -> List[s
 
     return accounts
 
-def get_new_account_requests_in_training_group(
-            new_act_reqs: List[str], 
-            curr_snapshot: dict, 
-            training_projects: Set[str]
-        ) -> List[str]:
-    """
-    Gets all new account requests that have already been added to a training
-    group. "Added to a training group" is defined as showing up as a member in
-    a training group with state=<active | pending>.
-
-    :param new_act_reqs: new accounts requested since the last snapshot was taken
-    :type new_act_reqs: List[str]
-    :param curr_snapshot: snapshot just recorded
-    :type curr_snapshot: dict
-    :param training_projects: predefined set of training projects to search for
-    :type training_projects: Set[str]
-    :return: list of users who have requested accounts since the last snapshot was taken and have also been added to a training project
-    :rtype: List[str]
-    """
-    accounts = list()
-
-    for user in new_act_reqs:
-        user_groups = curr_snapshot["users"][user]["groups"]
-
-        for group_name, state in user_groups.items():
-            if group_name in training_projects and\
-                state in {GroupMemberState.ACTIVE.value, GroupMemberState.PENDING.value}:
-
-                accounts.append(user)
-                break
-    
-    log.info(
-            "found {n} new account requests that have already been added to a training project: {acts}".format(
-            n=len(accounts),
-            acts=accounts
-        )
-    )
-
-    return accounts
-
-
-def get_new_account_requests_in_non_training_group(
-        new_act_reqs: List[str], 
-        curr_snapshot: dict, 
-        training_projects: Set[str], 
-        exclude={"root", "root.osg"}
-    ) -> List[str]:
-    """
-    Gets all new account requests that have already been added to a non training
-    group. "Added to a non training group" is defined as showing up as a member in
-    a group that is neither of any of the groups in "exclude" and "training_projects"
-    and having a group state=<active | pending>. 
-
-    :param new_act_reqs: new accounts requested since the last snapshot was taken
-    :type new_act_reqs: List[str]
-    :param curr_snapshot: snapshot just recorded
-    :type curr_snapshot: dict
-    :param training_projects: set of training projects to exclude
-    :type training_projects: Set[str]
-    :param exclude: non-training projects to exclude, defaults to {"root", "root.osg"}
-    :type exclude: dict, optional
-    :return: list of users who have requested accounts since the last snapshot was taken and have also been added to a non training project
-    :rtype: List[str]
-    """
-    exclude.update(training_projects)
-    accounts = list()
-
-    for user in new_act_reqs:
-        user_groups = curr_snapshot["users"][user]["groups"]
-
-        for group_name, state in user_groups.items():
-            if group_name not in exclude and\
-                state in {GroupMemberState.ACTIVE.value, GroupMemberState.PENDING.value}:
-            
-                accounts.append(user)
-                break
-    
-    log.info(
-            "found {n} new account requests that have already been added to a non training project (excluding {excluded}): {acts}".format(
-            n=len(accounts),
-            excluded=exclude,
-            acts=accounts
-        )
-    )
-
-    return accounts
-
-
 ### New Accounts Accepted Reporting ############################################
 def get_new_accounts_accepted(prev_snapshot: dict, curr_snapshot: dict) -> List[str]:
     """
@@ -338,14 +252,19 @@ def get_new_accounts_accepted(prev_snapshot: dict, curr_snapshot: dict) -> List[
 
         # TODO: figure out what it means to be in group root.osg
         # not all memebers are part of "root.osg", skip those that are not 
-        if "root.osg" in u_info["groups"]:
-            if u_info["groups"]["root.osg"] == GroupMemberState.PENDING.value \
-                and "root.osg" in curr_snapshot["users"][u_name]["groups"] \
-                and curr_snapshot["users"][u_name]["groups"]["root.osg"] == GroupMemberState.ACTIVE.value:
+        try:
+            if "root.osg" in u_info["groups"]:
+                if u_info["groups"]["root.osg"] == GroupMemberState.PENDING.value \
+                    and "root.osg" in curr_snapshot["users"][u_name]["groups"] \
+                    and curr_snapshot["users"][u_name]["groups"]["root.osg"] == GroupMemberState.ACTIVE.value:
 
-                accounts.append(u_name)
-        else:
-            log.warning("user: {u} does not have group root.osg".format(u=u_name))
+                    accounts.append(u_name)
+            else:
+                log.warning("user: {u} does not have group root.osg".format(u=u_name))
+        except KeyError as e:
+            print("problem key: {}".format(u_name))
+            print(e)
+
     
     log.info(
             "found {n} new accounts that have been accepted from {start} to {end}: {acts}".format(
@@ -446,8 +365,25 @@ def get_new_accounts_accepted_in_non_training_group(
 
     return accounts
 
+def parse_args(args=sys.argv[1:]):
+    """Argument parsing"""
+    parser = argparse.ArgumentParser(
+        description="""
+        Collects user account metrics, generates an html report, and
+        sends it to the given recipients.
+        """
+    )
+    parser.add_argument(
+        "recipients",
+        nargs="+",
+        help="recipients to which the report will be sent"
+    )
+
+    return parser.parse_args(args)
 
 if __name__=="__main__":
+    args = parse_args()
+
     # TODO: account for users that were deleted since the previous snapshot
     # was taken (we will get a keyerror in that case)
     # TODO: implement snapshot cleaner (limit 2 last 2 snapshots)
@@ -477,18 +413,6 @@ if __name__=="__main__":
             curr_snapshot=current_snapshot
         )
 
-    new_account_requests_in_training_group = get_new_account_requests_in_training_group(
-        new_act_reqs=new_account_requests,
-        curr_snapshot=current_snapshot,
-        training_projects=training_groups
-    )
-
-    new_account_requests_in_non_training_group = get_new_account_requests_in_non_training_group(
-        new_act_reqs=new_account_requests,
-        curr_snapshot=current_snapshot,
-        training_projects=training_groups
-    )
-
     # accounts accepted
     new_accounts_accepted = get_new_accounts_accepted(
         prev_snapshot=previous_snapshot,
@@ -508,30 +432,27 @@ if __name__=="__main__":
     )
 
     report = """
-    <p>TEST REPORT</p>
     <p>Account Reporting: {start} to {end} ({dur} days)</p>
     <ul>
-        <li>New Accounts Requested: {nar}</li>
+        <li>New Accounts Requested: {num_nar} ({nar})</li>
+        <li>New Accounts Accepted: {num_naa} ({naa})</li>
             <ul>
-                <li>AND in Training Group: {nar_tr}</li>
-                <li>AND in Non Training Group: {nar_ntr}</li>
-            </ul>
-        <li>New Accounts Accepted: {naa}</li>
-            <ul>
-                <li>AND in Training Group: {naa_tr}</li>
-                <li>AND in Non Training Group: {naa_ntr}</li>
+                <li>AND in Training Group: {num_naa_tr} ({naa_tr})</li>
+                <li>AND in Non Training Group: {num_naa_ntr} ({naa_ntr})</li>
             </ul>
     </ul>
     """.format(
         start=previous_snapshot["date"],
         end=current_snapshot["date"],
         dur=report_duration_in_days,
-        nar=len(new_account_requests),
-        nar_tr=len(new_account_requests_in_training_group),
-        nar_ntr=len(new_account_requests_in_non_training_group),
-        naa=len(new_accounts_accepted),
-        naa_tr=len(new_accounts_accepted_in_training_group),
-        naa_ntr=len(new_accounts_accepted_in_non_training_group)
+        num_nar=len(new_account_requests),
+        nar=new_account_requests,
+        num_naa=len(new_accounts_accepted),
+        naa=new_accounts_accepted,
+        num_naa_tr=len(new_accounts_accepted_in_training_group),
+        naa_tr=new_accounts_accepted_in_training_group,
+        num_naa_ntr=len(new_accounts_accepted_in_non_training_group),
+        naa_ntr=new_accounts_accepted_in_non_training_group
     )
 
-    send_report(recipients=["server@server.com"], msg_content=report)
+    send_report(recipients=args.recipients, msg_content=report)
