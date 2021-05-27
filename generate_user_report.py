@@ -11,7 +11,7 @@ from datetime import timezone
 from email.mime.text import MIMEText
 from enum import Enum
 from pathlib import Path
-from typing import List, Set, Union
+from typing import List, Set, Union, Tuple
 
 from client import UserApiClient
 
@@ -231,50 +231,78 @@ def get_new_account_requests(prev_snapshot: dict, curr_snapshot: dict) -> List[s
     return accounts
 
 ### New Accounts Accepted Reporting ############################################
-def get_new_accounts_accepted(prev_snapshot: dict, curr_snapshot: dict) -> List[str]:
+def get_new_accounts_accepted_and_rejected(prev_snapshot: dict, curr_snapshot: dict) -> Tuple[List[str], List[str]]:
     """
-    Gets all accounts that have been accepted since the last snapshot.  An "accepted
-    account" is defined as having its state moved from "pending" to "active".
+    Gets all accounts that have been accepted and rejected since the last snapshot.  
+    An "accepted account" is defined as having its state moved from "pending" to "active".
+    A "rejected account" is defined as having been a member of "root.osg" in the
+    previous snapshot, but not the current snapshot. 
 
     :param prev_snapshot: snapshot previously recorded
     :type prev_snapshot: dict
     :param curr_snapshot: snapshot just recorded
     :type curr_snapshot: dict
-    :return: list of users whos accounts have been accepted since the last snapshot was taken
-    :rtype: List[str]
+    :return: lists of users whos accounts have been accepted and rejected
+    :rtype: Tuple[List[str], List[str]]
     """
     start_date = datetime.strptime(prev_snapshot["date"], DATE_FMT)
     end_date = datetime.strptime(curr_snapshot["date"], DATE_FMT)
 
-    accounts = list()
+    # accounts[0] is ACCEPTED accounts
+    # accounts[1] is REJECTED accounts
+    accounts = (list(), list())
 
+    # look at "root.osg" state changes from previous snapshot to current snapshot
     for u_name, u_info in prev_snapshot["users"].items():
-
         # TODO: figure out what it means to be in group root.osg
         # not all memebers are part of "root.osg", skip those that are not 
         try:
+            # only care about members in "root.osg" in previous snapshot
             if "root.osg" in u_info["groups"]:
+
+                # account is accepted iff root.osg state moved from pending -> active from prev to curr snapshot
                 if u_info["groups"]["root.osg"] == GroupMemberState.PENDING.value \
-                    and "root.osg" in curr_snapshot["users"][u_name]["groups"] \
                     and curr_snapshot["users"][u_name]["groups"]["root.osg"] == GroupMemberState.ACTIVE.value:
 
-                    accounts.append(u_name)
-            else:
-                log.warning("user: {u} does not have group root.osg".format(u=u_name))
-        except KeyError as e:
-            print("problem key: {}".format(u_name))
-            print(e)
+                    # account was accepted!
+                    accounts[0].append(u_name)
 
+        # key error accessing curr_snapshot means account from prev not in curr, thus account was rejected
+        except KeyError as e:
+            # user from prev snapshot not in 
+            log.warning("problem key: {}, exception: {}; adding as rejected account".format(u_name, e))
+            
+            # account was rejected!
+            accounts[1].append(u_name)
+
+    # look for accounts have been just requested and accepted between the previous snapshot and the
+    # current snapshot (their entries will only exist in the current snapshot and their join
+    # date will be after the date of the previous snapshot)
+    for u_name, u_info in curr_snapshot["users"].items():
+        if "root.osg" in u_info["groups"] \
+            and u_info["groups"]["root.osg"] == GroupMemberState.ACTIVE.value \
+            and datetime.strptime(u_info["join_date"], DATE_FMT) > start_date:
+
+            # account was just accepted!
+            accounts[0].append(u_name)    
     
     log.info(
             "found {n} new accounts that have been accepted from {start} to {end}: {acts}".format(
-            n=len(accounts),
+            n=len(accounts[0]),
             start=start_date,
             end=end_date,
-            acts=accounts
+            acts=accounts[0]
         )
     )
 
+    log.info(
+        "found {n} new accounts that have been REJECTED from {start} to {end}: {acts}".format(
+            n=len(accounts[1]),
+            start=start_date,
+            end=end_date,
+            acts=accounts[1]
+        )
+    )
 
     return accounts
 
@@ -384,10 +412,6 @@ def parse_args(args=sys.argv[1:]):
 if __name__=="__main__":
     args = parse_args()
 
-    # TODO: account for users that were deleted since the previous snapshot
-    # was taken (we will get a keyerror in that case)
-    # TODO: implement snapshot cleaner (limit 2 last 2 snapshots)
-
     # TODO: cleanup smtp code; add error checking; logging
 
     previous_snapshot_file = get_latest_snapshot_on_disk()
@@ -414,10 +438,13 @@ if __name__=="__main__":
         )
 
     # accounts accepted
-    new_accounts_accepted = get_new_accounts_accepted(
+    new_accounts_accepted_and_rejected = get_new_accounts_accepted_and_rejected(
         prev_snapshot=previous_snapshot,
         curr_snapshot=current_snapshot
     )
+
+    new_accounts_accepted = new_accounts_accepted_and_rejected[0]
+    new_accounts_rejected = new_accounts_accepted_and_rejected[1]
 
     new_accounts_accepted_in_training_group = get_new_accounts_accepted_in_training_group(
         new_acts_accepted=new_accounts_accepted,
@@ -434,12 +461,13 @@ if __name__=="__main__":
     report = """
     <p>Account Reporting: {start} to {end} ({dur} days)</p>
     <ul>
-        <li>New Accounts Requested: {num_nar} ({nar})</li>
-        <li>New Accounts Accepted: {num_naa} ({naa})</li>
+        <li>Accounts Requested: {num_nar} ({nar})</li>
+        <li>Accounts Accepted: {num_naa} ({naa})</li>
             <ul>
                 <li>AND in Training Group: {num_naa_tr} ({naa_tr})</li>
                 <li>AND in Non Training Group: {num_naa_ntr} ({naa_ntr})</li>
             </ul>
+        <li>Accounts Rejected: {num_rej} ({narej})</li>
     </ul>
     """.format(
         start=previous_snapshot["date"],
@@ -452,7 +480,9 @@ if __name__=="__main__":
         num_naa_tr=len(new_accounts_accepted_in_training_group),
         naa_tr=new_accounts_accepted_in_training_group,
         num_naa_ntr=len(new_accounts_accepted_in_non_training_group),
-        naa_ntr=new_accounts_accepted_in_non_training_group
+        naa_ntr=new_accounts_accepted_in_non_training_group,
+        num_rej=len(new_accounts_rejected),
+        narej=new_accounts_rejected
     )
 
     send_report(recipients=args.recipients, msg_content=report)
