@@ -421,7 +421,7 @@ def parse_args(args=sys.argv[1:]):
         """
     )
     parser.add_argument(
-        "recipients",
+        "--recipients",
         nargs="+",
         help="recipients to which the report will be sent"
     )
@@ -510,31 +510,32 @@ if __name__=="__main__":
         training_projects=training_groups
     )
 
-    report = """
-    <p>Account Reporting: {start} to {end} ({dur} days)</p>
-    <ul>
-        <li>Accounts Requested: {num_nar} ({nar})</li>
-        <li>Accounts Accepted: {num_naa} ({naa})</li>
-            <ul>
-                <li>AND in Training Group: {num_naa_tr} ({naa_tr})</li>
-                <li>AND in Non Training Group: {num_naa_ntr} ({naa_ntr})</li>
-            </ul>
-        <li>Accounts Rejected: {num_rej} ({narej})</li>
-    </ul>
-    """.format(
-        start=previous_snapshot["date"],
-        end=current_snapshot["date"],
-        dur=report_duration_in_days,
-        num_nar=len(new_account_requests),
-        nar=new_account_requests,
-        num_naa=len(new_accounts_accepted),
-        naa=new_accounts_accepted,
-        num_naa_tr=len(new_accounts_accepted_in_training_group),
-        naa_tr=new_accounts_accepted_in_training_group,
-        num_naa_ntr=len(new_accounts_accepted_in_non_training_group),
-        naa_ntr=new_accounts_accepted_in_non_training_group,
-        num_rej=len(new_accounts_rejected),
-        narej=new_accounts_rejected
-    )
+    if args.recipients:
+        report = """
+        <p>Account Reporting: {start} to {end} ({dur} days)</p>
+        <ul>
+            <li>Accounts Requested: {num_nar} ({nar})</li>
+            <li>Accounts Accepted: {num_naa} ({naa})</li>
+                <ul>
+                    <li>AND in Training Group: {num_naa_tr} ({naa_tr})</li>
+                    <li>AND in Non Training Group: {num_naa_ntr} ({naa_ntr})</li>
+                </ul>
+            <li>Accounts Rejected: {num_rej} ({narej})</li>
+        </ul>
+        """.format(
+            start=previous_snapshot["date"],
+            end=current_snapshot["date"],
+            dur=report_duration_in_days,
+            num_nar=len(new_account_requests),
+            nar=new_account_requests,
+            num_naa=len(new_accounts_accepted),
+            naa=new_accounts_accepted,
+            num_naa_tr=len(new_accounts_accepted_in_training_group),
+            naa_tr=new_accounts_accepted_in_training_group,
+            num_naa_ntr=len(new_accounts_accepted_in_non_training_group),
+            naa_ntr=new_accounts_accepted_in_non_training_group,
+            num_rej=len(new_accounts_rejected),
+            narej=new_accounts_rejected
+        )
 
-    send_report(recipients=args.recipients, msg_content=report)
+        send_report(recipients=args.recipients, msg_content=report)
