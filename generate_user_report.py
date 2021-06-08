@@ -21,8 +21,6 @@ DATE_FMT = "%Y-%b-%d %H:%M:%S.%f %Z"
 
 log = logging.getLogger("reporter")
 
-logging.basicConfig(level=logging.DEBUG)
-
 class GroupMemberState(Enum):
     """Possible group membership states"""
     NONMEMBER = "nonmember"
@@ -440,10 +438,23 @@ def parse_args(args=sys.argv[1:]):
         help="snapshot to end with, used to 'replay' from a specific snapshot"
     )
 
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="enable debug mode"
+    )
+
     return parser.parse_args(args)
 
 if __name__=="__main__":
     args = parse_args()
+
+    log_level = logging.INFO
+    if args.debug:
+        log_level = logging.DEBUG
+    
+    logging.basicConfig(level=log_level)
 
     # TODO: cleanup smtp code; add error checking; logging
 
