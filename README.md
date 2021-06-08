@@ -23,16 +23,18 @@ upon completion.
 ## Usage
 
 ```
-usage: generate_user_report.py [-h] recipients [recipients ...]
+usage: generate_user_report.py [-h] [--recipients RECIPIENTS [RECIPIENTS ...]] [--start START] [--end END] [--debug]
 
 Collects user account metrics, generates an html report, and sends it to the given recipients.
 
-positional arguments:
-  recipients  recipients to which the report will be sent
-
 optional arguments:
-  -h, --help  show this help message and exit
+  -h, --help            show this help message and exit
+  --recipients RECIPIENTS [RECIPIENTS ...]
+                        recipients to which the report will be sent
+  --start START         snapshot to start from, used to 'replay' from a specific snapshot
+  --end END             snapshot to end with, used to 'replay' from a specific snapshot
+  --debug               enable debug mode
 ```
 
-Example: `python3 generate_user_report.py email@domain`
+Example: `python3 generate_user_report.py --recipients email@domain`
 
