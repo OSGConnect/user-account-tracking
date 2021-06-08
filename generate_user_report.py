@@ -140,6 +140,23 @@ def get_latest_snapshot_on_disk() -> Union[Path, None]:
 
     return latest_snapshot_file
 
+def get_snapshot_on_disk(snapshot: str) -> dict:
+    """Returns the given snapshot as a dict.
+
+    :param snapshot: name of the snapshot
+    :type snapshot: str
+    :return: dict representation of the snapshot
+    :rtype: dict
+    :raises FileNotFoundError: given snapshot could not be found 
+    """
+    SNAPSHOT_DIR = Path(__file__).parent.resolve() / "snapshots"
+
+    target_snapshot = SNAPSHOT_DIR / snapshot
+
+    with target_snapshot.open("r") as f:
+        return json.load(f)
+
+
 def send_report(recipients: List[str], msg_content: str) -> None:
 
     # TODO: parametrize email recipients.. (or load from file to keep from versioning)
@@ -253,7 +270,9 @@ def get_new_accounts_accepted_and_rejected(prev_snapshot: dict, curr_snapshot: d
     accounts = (list(), list())
 
     # look at "root.osg" state changes from previous snapshot to current snapshot
+    log.debug("looking at root.osg state changes from previous to current snapshot")
     for u_name, u_info in prev_snapshot["users"].items():
+        log.debug("working on {}".format(u_name))
         # TODO: figure out what it means to be in group root.osg
         # not all memebers are part of "root.osg", skip those that are not 
         try:
@@ -278,7 +297,9 @@ def get_new_accounts_accepted_and_rejected(prev_snapshot: dict, curr_snapshot: d
     # look for accounts have been just requested and accepted between the previous snapshot and the
     # current snapshot (their entries will only exist in the current snapshot and their join
     # date will be after the date of the previous snapshot)
+    log.debug("looking at accounts that have been just requested and accepted between snapshots")
     for u_name, u_info in curr_snapshot["users"].items():
+        log.debug("working on {}".format(u_name))
         if "root.osg" in u_info["groups"] \
             and u_info["groups"]["root.osg"] == GroupMemberState.ACTIVE.value \
             and datetime.strptime(u_info["join_date"], DATE_FMT) > start_date:
@@ -407,6 +428,18 @@ def parse_args(args=sys.argv[1:]):
         help="recipients to which the report will be sent"
     )
 
+    parser.add_argument(
+        "--start",
+        type=str, 
+        help="snapshot to start from, used to 'replay' from a specific snapshot"
+    )
+
+    parser.add_argument(
+        "--end",
+        type=str,
+        help="snapshot to end with, used to 'replay' from a specific snapshot"
+    )
+
     return parser.parse_args(args)
 
 if __name__=="__main__":
@@ -414,17 +447,25 @@ if __name__=="__main__":
 
     # TODO: cleanup smtp code; add error checking; logging
 
-    previous_snapshot_file = get_latest_snapshot_on_disk()
+    if args.start:
+        previous_snapshot = get_snapshot_on_disk(args.start)
+        log.info("using start snapshot: {}".format(args.start))
+    else:
+        previous_snapshot_file = get_latest_snapshot_on_disk()
 
-    if not previous_snapshot_file:
-        log.info("No previous snapshot found, exiting")
-        sys.exit(1)
+        if not previous_snapshot_file:
+            log.info("No previous snapshot found, exiting")
+            sys.exit(1)
 
-    with previous_snapshot_file.open("r") as f:
-        previous_snapshot = json.load(f)
+        with previous_snapshot_file.open("r") as f:
+            previous_snapshot = json.load(f)
     
-    current_snapshot = get_snapshot(save=True)
-
+    if args.end:
+        current_snapshot = get_snapshot_on_disk(args.end)
+        log.info("using end snapshot: {}".format(args.end))
+    else:
+        current_snapshot = get_snapshot(save=True)
+    
     previous_snapshot_date = datetime.strptime(previous_snapshot["date"], DATE_FMT)
     current_snapshot_date = datetime.strptime(current_snapshot["date"], DATE_FMT)
     report_duration_in_days = (current_snapshot_date - previous_snapshot_date).days
