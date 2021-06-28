@@ -1,7 +1,7 @@
 [
-    "UserTraining-AHM-2020",
-    "Tutorial-PEARC20",
-    "CampusWorkshop_Feb2021",
-    "Workshop-RMACC21",
-    "OSGUserTrainingPilot"
+    "root.osg.UserTraining-AHM-2020",
+    "root.osg.Tutorial-PEARC20",
+    "root.osg.CampusWorkshop_Feb2021",
+    "root.osg.Workshop-RMACC21",
+    "root.osg.OSGUserTrainingPilot"
 ]
