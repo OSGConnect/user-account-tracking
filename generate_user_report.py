@@ -296,14 +296,15 @@ def get_new_accounts_accepted_and_rejected(prev_snapshot: dict, curr_snapshot: d
     # current snapshot (their entries will only exist in the current snapshot and their join
     # date will be after the date of the previous snapshot)
     log.debug("looking at accounts that have been just requested and accepted between snapshots")
-    for u_name, u_info in curr_snapshot["users"].items():
-        log.debug("working on {}".format(u_name))
-        if "root.osg" in u_info["groups"] \
-            and u_info["groups"]["root.osg"] == GroupMemberState.ACTIVE.value \
-            and datetime.strptime(u_info["join_date"], DATE_FMT) > start_date:
+    for name, info in curr_snapshot["users"].items():
+        log.debug("working on {}".format(name))
+        log.debug(info)
+        if "root.osg" in info["groups"] \
+            and info["groups"]["root.osg"] == GroupMemberState.ACTIVE.value \
+            and datetime.strptime(info["join_date"], DATE_FMT) > start_date:
 
             # account was just accepted!
-            accounts[0].append(u_name)    
+            accounts[0].append(name)    
     
     log.info(
             "found {n} new accounts that have been accepted from {start} to {end}: {acts}".format(
@@ -475,7 +476,9 @@ if __name__=="__main__":
         current_snapshot = get_snapshot_on_disk(args.end)
         log.info("using end snapshot: {}".format(args.end))
     else:
-        current_snapshot = get_snapshot(save=True)
+        get_snapshot(save=True)
+        with get_latest_snapshot_on_disk().open("r") as f:
+            current_snapshot = json.load(f)
     
     previous_snapshot_date = datetime.strptime(previous_snapshot["date"], DATE_FMT)
     current_snapshot_date = datetime.strptime(current_snapshot["date"], DATE_FMT)
