@@ -371,7 +371,7 @@ def get_new_accounts_accepted_in_non_training_group(
         new_acts_accepted: List[str],
         curr_snapshot: dict, 
         training_projects: Set[str], 
-        exclude: Set[str] = {"root", "root.osg"}
+        exclude: Set[str] = {"root", "root.osg", "root.osg.login-nodes", "root.osg.login-nodes.login05", "root.osg.login-nodes.login04"}
     ) -> List[str]:
     """
     Gets all accounts that have been accepted since the last snapshot and have
@@ -385,7 +385,7 @@ def get_new_accounts_accepted_in_non_training_group(
     :type curr_snapshot: dict
     :param training_projects: predefiend set of training projects to exclude
     :type training_projects: Set[str]
-    :param exclude: non-training projects to exclude, defaults to {"root", "root.osg"}
+    :param exclude: non-training projects to exclude, defaults to {"root", "root.osg", "root.osg.login-nodes", "root.osg.login-nodes.login05", "root.osg.login-nodes.login04"}
     :type exclude: Set[str], optional
     :return: list of users whos accounts have been accepted and added to a non training project
     :rtype: List[str]
